@@ -7,25 +7,31 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: sans-serif; background: #0f0f0f; color: #fff; padding: 40px 20px; }
-    h1 { text-align: center; margin-bottom: 10px; color: #7c3aed; }
-    p.sub { text-align: center; color: #888; margin-bottom: 40px; }
-    .card { background: #1a1a1a; border-radius: 12px; padding: 24px; max-width: 700px; margin: 0 auto 24px; }
-    input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #111; color: #fff; margin-bottom: 10px; }
-    button { padding: 10px 20px; background: #7c3aed; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    h1 { text-align: center; margin-bottom: 10px; color: #7c3aed; font-size: 28px; }
+    p.sub { text-align: center; color: #888; margin-bottom: 40px; font-size: 14px; }
+    .card { background: #1a1a1a; border-radius: 12px; padding: 24px; max-width: 700px; margin: 0 auto 24px; border: 1px solid #2a2a2a; }
+    h2 { margin-bottom: 16px; font-size: 15px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+    input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #111; color: #fff; margin-bottom: 10px; font-size: 14px; }
+    input:focus { outline: none; border-color: #7c3aed; }
+    button { padding: 10px 24px; background: #7c3aed; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
     button:hover { background: #6d28d9; }
-    pre { background: #111; padding: 16px; border-radius: 8px; overflow-x: auto; margin-top: 16px; font-size: 13px; color: #a0f0a0; white-space: pre-wrap; }
-    h2 { margin-bottom: 16px; font-size: 16px; color: #aaa; }
+    button:disabled { background: #444; cursor: not-allowed; }
+    pre { background: #111; padding: 16px; border-radius: 8px; overflow-x: auto; margin-top: 16px; font-size: 13px; color: #a0f0a0; white-space: pre-wrap; border: 1px solid #222; min-height: 60px; }
+    .error { color: #f87171; }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .footer { text-align: center; color: #444; font-size: 12px; margin-top: 40px; }
   </style>
 </head>
 <body>
   <h1>🔬 AI Research Copilot</h1>
-  <p class="sub">Powered by Groq + Tavily</p>
+  <p class="sub">Powered by Groq + Tavily — Real-time AI research tool</p>
 
   <!-- Research -->
   <div class="card">
     <h2>Research a Topic</h2>
     <input id="researchInput" placeholder="e.g. quantum computing" />
-    <button onclick="research()">Research</button>
+    <button id="researchBtn" onclick="research()">Research</button>
     <pre id="researchOutput">Output will appear here...</pre>
   </div>
 
@@ -34,7 +40,7 @@
     <h2>Compare Two Topics</h2>
     <input id="compareA" placeholder="Topic A e.g. Python" />
     <input id="compareB" placeholder="Topic B e.g. JavaScript" />
-    <button onclick="compare()">Compare</button>
+    <button id="compareBtn" onclick="compare()">Compare</button>
     <pre id="compareOutput">Output will appear here...</pre>
   </div>
 
@@ -42,53 +48,75 @@
   <div class="card">
     <h2>Summarize a URL</h2>
     <input id="summarizeInput" placeholder="https://..." />
-    <button onclick="summarize()">Summarize</button>
+    <button id="summarizeBtn" onclick="summarize()">Summarize</button>
     <pre id="summarizeOutput">Output will appear here...</pre>
   </div>
 
+  <!-- Trending -->
   <div class="card">
     <h2>Trending Topics</h2>
     <input id="trendingInput" placeholder="e.g. AI, crypto, tech" />
-    <button onclick="trending()">Get Trending</button>
+    <button id="trendingBtn" onclick="trending()">Get Trending</button>
     <pre id="trendingOutput">Output will appear here...</pre>
   </div>
+
+  <p class="footer">Built with FastAPI + Groq + Tavily</p>
 
   <script>
     const BASE = "https://ai-copilot-production-c2eb.up.railway.app";
 
-    async function research() {
-      const topic = document.getElementById("researchInput").value;
-      document.getElementById("researchOutput").textContent = "Loading...";
-      const res = await fetch(`${BASE}/research?topic=${encodeURIComponent(topic)}`);
-      const data = await res.json();
-      document.getElementById("researchOutput").textContent = JSON.stringify(data, null, 2);
+    function setLoading(btnId, outputId, loading) {
+      const btn = document.getElementById(btnId);
+      const out = document.getElementById(outputId);
+      if (loading) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span>Loading...';
+        out.textContent = "";
+        out.className = "";
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = btn.dataset.label;
+      }
     }
 
-    async function compare() {
+    async function callAPI(url, btnId, outputId) {
+      const btn = document.getElementById(btnId);
+      btn.dataset.label = btn.textContent;
+      setLoading(btnId, outputId, true);
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("API error");
+        const data = await res.json();
+        document.getElementById(outputId).textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        const out = document.getElementById(outputId);
+        out.textContent = "❌ Error: " + e.message;
+        out.className = "error";
+      } finally {
+        setLoading(btnId, outputId, false);
+      }
+    }
+
+    function research() {
+      const topic = document.getElementById("researchInput").value;
+      callAPI(`${BASE}/research?topic=${encodeURIComponent(topic)}`, "researchBtn", "researchOutput");
+    }
+
+    function compare() {
       const a = document.getElementById("compareA").value;
       const b = document.getElementById("compareB").value;
-      document.getElementById("compareOutput").textContent = "Loading...";
-      const res = await fetch(`${BASE}/compare?topic_a=${encodeURIComponent(a)}&topic_b=${encodeURIComponent(b)}`);
-      const data = await res.json();
-      document.getElementById("compareOutput").textContent = JSON.stringify(data, null, 2);
+      callAPI(`${BASE}/compare?topic_a=${encodeURIComponent(a)}&topic_b=${encodeURIComponent(b)}`, "compareBtn", "compareOutput");
     }
 
-    async function summarize() {
+    function summarize() {
       const url = document.getElementById("summarizeInput").value;
-      document.getElementById("summarizeOutput").textContent = "Loading...";
-      const res = await fetch(`${BASE}/summarize?url=${encodeURIComponent(url)}`);
-      const data = await res.json();
-      document.getElementById("summarizeOutput").textContent = JSON.stringify(data, null, 2);
+      callAPI(`${BASE}/summarize?url=${encodeURIComponent(url)}`, "summarizeBtn", "summarizeOutput");
     }
 
-    async function trending() {
+    function trending() {
       const category = document.getElementById("trendingInput").value;
-      document.getElementById("trendingOutput").textContent = "Loading...";
-      const res = await fetch(`${BASE}/trending?category=${encodeURIComponent(category)}`);
-      const data = await res.json();
-      document.getElementById("trendingOutput").textContent = JSON.stringify(data, null, 2);
+      callAPI(`${BASE}/trending?category=${encodeURIComponent(category)}`, "trendingBtn", "trendingOutput");
     }
-  
   </script>
 </body>
 </html>
