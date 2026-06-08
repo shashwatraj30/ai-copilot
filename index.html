@@ -46,6 +46,13 @@
     <pre id="summarizeOutput">Output will appear here...</pre>
   </div>
 
+  <div class="card">
+    <h2>Trending Topics</h2>
+    <input id="trendingInput" placeholder="e.g. AI, crypto, tech" />
+    <button onclick="trending()">Get Trending</button>
+    <pre id="trendingOutput">Output will appear here...</pre>
+  </div>
+
   <script>
     const BASE = "https://ai-copilot-production-c2eb.up.railway.app";
 
@@ -73,6 +80,15 @@
       const data = await res.json();
       document.getElementById("summarizeOutput").textContent = JSON.stringify(data, null, 2);
     }
+
+    async function trending() {
+      const category = document.getElementById("trendingInput").value;
+      document.getElementById("trendingOutput").textContent = "Loading...";
+      const res = await fetch(`${BASE}/trending?category=${encodeURIComponent(category)}`);
+      const data = await res.json();
+      document.getElementById("trendingOutput").textContent = JSON.stringify(data, null, 2);
+    }
+  
   </script>
 </body>
 </html>
