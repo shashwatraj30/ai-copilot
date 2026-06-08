@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from groq import Groq
 from dotenv import load_dotenv
 from tavily import TavilyClient
+from newspaper import Article
 import os
 import json
 
@@ -77,6 +78,34 @@ Respond ONLY with a JSON object in this exact format, nothing else:
   "similarities": ["similarity 1", "similarity 2"],
   "differences": ["difference 1", "difference 2", "difference 3"],
   "verdict": "one sentence on which is better and for what use case"
+}}"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    raw = response.choices[0].message.content
+    return json.loads(raw)
+
+@app.get("/summarize")
+def summarize(url: str):
+    # Fetch article content
+    article = Article(url)
+    article.download()
+    article.parse()
+    
+    prompt = f"""You are a research assistant. Summarize the following article content.
+
+Title: {article.title}
+Content: {article.text[:3000]}
+
+Respond ONLY with a JSON object in this exact format, nothing else:
+{{
+  "url": "{url}",
+  "title": "{article.title}",
+  "summary": "2-3 sentence summary",
+  "key_points": ["point 1", "point 2", "point 3"]
 }}"""
 
     response = client.chat.completions.create(
