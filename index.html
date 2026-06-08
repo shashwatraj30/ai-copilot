@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Research Copilot</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #0f0f0f; color: #fff; padding: 40px 20px; }
+    h1 { text-align: center; margin-bottom: 10px; color: #7c3aed; }
+    p.sub { text-align: center; color: #888; margin-bottom: 40px; }
+    .card { background: #1a1a1a; border-radius: 12px; padding: 24px; max-width: 700px; margin: 0 auto 24px; }
+    input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333; background: #111; color: #fff; margin-bottom: 10px; }
+    button { padding: 10px 20px; background: #7c3aed; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    button:hover { background: #6d28d9; }
+    pre { background: #111; padding: 16px; border-radius: 8px; overflow-x: auto; margin-top: 16px; font-size: 13px; color: #a0f0a0; white-space: pre-wrap; }
+    h2 { margin-bottom: 16px; font-size: 16px; color: #aaa; }
+  </style>
+</head>
+<body>
+  <h1>🔬 AI Research Copilot</h1>
+  <p class="sub">Powered by Groq + Tavily</p>
+
+  <!-- Research -->
+  <div class="card">
+    <h2>Research a Topic</h2>
+    <input id="researchInput" placeholder="e.g. quantum computing" />
+    <button onclick="research()">Research</button>
+    <pre id="researchOutput">Output will appear here...</pre>
+  </div>
+
+  <!-- Compare -->
+  <div class="card">
+    <h2>Compare Two Topics</h2>
+    <input id="compareA" placeholder="Topic A e.g. Python" />
+    <input id="compareB" placeholder="Topic B e.g. JavaScript" />
+    <button onclick="compare()">Compare</button>
+    <pre id="compareOutput">Output will appear here...</pre>
+  </div>
+
+  <!-- Summarize -->
+  <div class="card">
+    <h2>Summarize a URL</h2>
+    <input id="summarizeInput" placeholder="https://..." />
+    <button onclick="summarize()">Summarize</button>
+    <pre id="summarizeOutput">Output will appear here...</pre>
+  </div>
+
+  <script>
+    const BASE = "https://ai-copilot-production-c2eb.up.railway.app";
+
+    async function research() {
+      const topic = document.getElementById("researchInput").value;
+      document.getElementById("researchOutput").textContent = "Loading...";
+      const res = await fetch(`${BASE}/research?topic=${encodeURIComponent(topic)}`);
+      const data = await res.json();
+      document.getElementById("researchOutput").textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function compare() {
+      const a = document.getElementById("compareA").value;
+      const b = document.getElementById("compareB").value;
+      document.getElementById("compareOutput").textContent = "Loading...";
+      const res = await fetch(`${BASE}/compare?topic_a=${encodeURIComponent(a)}&topic_b=${encodeURIComponent(b)}`);
+      const data = await res.json();
+      document.getElementById("compareOutput").textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function summarize() {
+      const url = document.getElementById("summarizeInput").value;
+      document.getElementById("summarizeOutput").textContent = "Loading...";
+      const res = await fetch(`${BASE}/summarize?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      document.getElementById("summarizeOutput").textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>

@@ -3,12 +3,19 @@ from groq import Groq
 from dotenv import load_dotenv
 from tavily import TavilyClient
 from newspaper import Article
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import json
 
 load_dotenv()
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
