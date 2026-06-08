@@ -122,3 +122,28 @@ Respond ONLY with a JSON object in this exact format, nothing else:
 
     raw = response.choices[0].message.content
     return json.loads(raw)
+
+@app.get("/trending")
+def trending(category: str):
+    results = tavily.search(query=f"trending {category} news today", max_results=5)
+    context = "\n".join([r["content"] for r in results["results"]])
+
+    prompt = f"""You are a research assistant. Based on these search results, identify trending topics in {category}.
+
+Search Results:
+{context}
+
+Respond ONLY with a JSON object in this exact format, nothing else:
+{{
+  "category": "{category}",
+  "trending_topics": ["topic 1", "topic 2", "topic 3"],
+  "summaries": ["one sentence summary 1", "one sentence summary 2", "one sentence summary 3"]
+}}"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    raw = response.choices[0].message.content
+    return json.loads(raw)
