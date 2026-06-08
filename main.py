@@ -50,3 +50,39 @@ Respond ONLY with a JSON object in this exact format, nothing else:
 
     raw = response.choices[0].message.content
     return json.loads(raw)
+
+
+@app.get("/compare")
+def compare(topic_a: str, topic_b: str):
+    # Search both topics
+    results_a = tavily.search(query=topic_a, max_results=2)
+    results_b = tavily.search(query=topic_b, max_results=2)
+    
+    context_a = "\n".join([r["content"] for r in results_a["results"]])
+    context_b = "\n".join([r["content"] for r in results_b["results"]])
+
+    prompt = f"""You are a research assistant. Compare these two topics based on the search results below.
+
+Topic A: {topic_a}
+Search Results A: {context_a}
+
+Topic B: {topic_b}
+Search Results B: {context_b}
+
+Respond ONLY with a JSON object in this exact format, nothing else:
+{{
+  "topic_a": "{topic_a}",
+  "topic_b": "{topic_b}",
+  "summary": "2-3 sentence overall comparison",
+  "similarities": ["similarity 1", "similarity 2"],
+  "differences": ["difference 1", "difference 2", "difference 3"],
+  "verdict": "one sentence on which is better and for what use case"
+}}"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    raw = response.choices[0].message.content
+    return json.loads(raw)
