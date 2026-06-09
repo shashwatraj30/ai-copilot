@@ -28,12 +28,13 @@
   <p class="sub">Powered by Groq + Tavily — Real-time AI research tool</p>
 
   <!-- Research -->
-  <div class="card">
-    <h2>Research a Topic</h2>
-    <input id="researchInput" placeholder="e.g. quantum computing" />
-    <button id="researchBtn" onclick="research()">Research</button>
-    <pre id="researchOutput">Output will appear here...</pre>
-  </div>
+<div class="card">
+  <h2>Research a Topic</h2>
+  <input id="researchInput" placeholder="e.g. quantum computing" />
+  <button id="researchBtn" onclick="research()">Research</button>
+  <button id="saveBtn" onclick="saveResearch()" style="display:none;background:#059669;">Save Result</button>
+  <pre id="researchOutput">Output will appear here...</pre>
+</div>
 
   <!-- Compare -->
   <div class="card">
@@ -79,7 +80,25 @@
 
   <script>
     const BASE = "https://ai-copilot-production-c2eb.up.railway.app";
+    let lastResearchResult = null;
 
+async function saveResearch() {
+  if (!lastResearchResult) return;
+  try {
+    const res = await fetch(`${BASE}/save-research`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: lastResearchResult.topic,
+        result: lastResearchResult
+      })
+    });
+    const data = await res.json();
+    alert("✅ Research saved!");
+  } catch (e) {
+    alert("❌ Failed to save: " + e.message);
+  }
+}
     function setLoading(btnId, outputId, loading) {
       const btn = document.getElementById(btnId);
       const out = document.getElementById(outputId);
@@ -125,7 +144,33 @@
 
 function research() {
   const topic = document.getElementById("researchInput").value;
-  callAPI(`${BASE}/research?topic=${encodeURIComponent(topic)}`, "researchBtn", "researchOutput", "Research");
+  const btn = document.getElementById("researchBtn");
+  btn.dataset.label = btn.textContent;
+  setLoading("researchBtn", "researchOutput", true);
+
+  fetch(`${BASE}/research?topic=${encodeURIComponent(topic)}`)
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("researchOutput").textContent = JSON.stringify(data, null, 2);
+      lastResearchResult = data;
+      document.getElementById("saveBtn").style.display = "inline-block";
+
+      // Silent context injection
+      fetch(`${BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: SESSION_ID,
+          message: `Context from Research: ${JSON.stringify(data)}`
+        })
+      });
+    })
+    .catch(e => {
+      const out = document.getElementById("researchOutput");
+      out.textContent = "❌ Error: " + e.message;
+      out.className = "error";
+    })
+    .finally(() => setLoading("researchBtn", "researchOutput", false));
 }
 
 function compare() {
