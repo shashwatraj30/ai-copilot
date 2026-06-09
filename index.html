@@ -59,7 +59,15 @@
     <button id="trendingBtn" onclick="trending()">Get Trending</button>
     <pre id="trendingOutput">Output will appear here...</pre>
   </div>
-
+   <!-- Chat -->
+<div class="card">
+  <h2>Chat with Copilot</h2>
+  <div id="chatWindow" style="height:300px;overflow-y:auto;background:#111;border-radius:8px;padding:16px;margin-bottom:10px;border:1px solid #222;display:flex;flex-direction:column;gap:10px;"></div>
+  <div style="display:flex;gap:8px;">
+    <input id="chatInput" placeholder="Ask anything..." onkeydown="if(event.key==='Enter')sendChat()" style="margin-bottom:0;" />
+    <button id="chatBtn" onclick="sendChat()">Send</button>
+  </div>
+</div>
   <p class="footer">Built with FastAPI + Groq + Tavily</p>
 
   <script>
@@ -117,6 +125,48 @@
       const category = document.getElementById("trendingInput").value;
       callAPI(`${BASE}/trending?category=${encodeURIComponent(category)}`, "trendingBtn", "trendingOutput");
     }
+
+    const SESSION_ID = "user_" + Math.random().toString(36).substr(2, 9);
+
+function appendMessage(role, text) {
+  const chatWindow = document.getElementById("chatWindow");
+  const msg = document.createElement("div");
+  msg.style.cssText = `max-width:80%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.5;${
+    role === "user"
+      ? "background:#7c3aed;align-self:flex-end;"
+      : "background:#2a2a2a;align-self:flex-start;"
+  }`;
+  msg.textContent = text;
+  chatWindow.appendChild(msg);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById("chatInput");
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = "";
+  appendMessage("user", message);
+
+  const btn = document.getElementById("chatBtn");
+  btn.disabled = true;
+  btn.textContent = "...";
+
+  try {
+    const res = await fetch(`${BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: SESSION_ID, message })
+    });
+    const data = await res.json();
+    appendMessage("assistant", data.reply);
+  } catch (e) {
+    appendMessage("assistant", "❌ Error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Send";
+  }
+}
   </script>
 </body>
 </html>
