@@ -6,6 +6,7 @@ from newspaper import Article
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import json
+conversation_store = {}
 
 load_dotenv()
 
@@ -147,3 +148,44 @@ Respond ONLY with a JSON object in this exact format, nothing else:
 
     raw = response.choices[0].message.content
     return json.loads(raw)
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+    session_id = request.session_id
+    
+    # Create new session if doesn't exist
+    if session_id not in conversation_store:
+        conversation_store[session_id] = []
+    
+    # Append user message to history
+    conversation_store[session_id].append({
+        "role": "user",
+        "content": request.message
+    })
+    
+    # Send full history to Groq
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=conversation_store[session_id]
+    )
+    
+    assistant_reply = response.choices[0].message.content
+    
+    # Append assistant reply to history
+    conversation_store[session_id].append({
+        "role": "assistant",
+        "content": assistant_reply
+    })
+    
+    return {
+        "session_id": session_id,
+        "reply": assistant_reply,
+        "history_length": len(conversation_store[session_id])
+    }
