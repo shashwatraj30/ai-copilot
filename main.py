@@ -175,7 +175,7 @@ def chat(request: ChatRequest):
     # Send full history to Groq
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=conversation_store[session_id]
+        messages=conversation_store[session_id][-10:]
     )
     
     assistant_reply = response.choices[0].message.content
