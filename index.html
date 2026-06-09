@@ -59,6 +59,13 @@
     <button id="trendingBtn" onclick="trending()">Get Trending</button>
     <pre id="trendingOutput">Output will appear here...</pre>
   </div>
+  <!-- Fact Check -->
+<div class="card">
+  <h2>Fact Check a Claim</h2>
+  <input id="factInput" placeholder="e.g. Python is the most popular language" />
+  <button id="factBtn" onclick="factCheck()">Fact Check</button>
+  <pre id="factOutput">Output will appear here...</pre>
+</div>
    <!-- Chat -->
 <div class="card">
   <h2>Chat with Copilot</h2>
@@ -137,6 +144,11 @@ function trending() {
   callAPI(`${BASE}/trending?category=${encodeURIComponent(category)}`, "trendingBtn", "trendingOutput", "Trending");
 }
 
+function factCheck() {
+  const claim = document.getElementById("factInput").value;
+  callAPI(`${BASE}/fact-check?claim=${encodeURIComponent(claim)}`, "factBtn", "factOutput", "FactCheck");
+}
+
     const SESSION_ID = "user_" + Math.random().toString(36).substr(2, 9);
 
 function appendMessage(role, text) {
@@ -177,6 +189,7 @@ async function sendChat() {
     btn.disabled = false;
     btn.textContent = "Send";
   }
+
 }
   </script>
 </body>
