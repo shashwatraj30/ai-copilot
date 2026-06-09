@@ -87,44 +87,55 @@
       }
     }
 
-    async function callAPI(url, btnId, outputId) {
-      const btn = document.getElementById(btnId);
-      btn.dataset.label = btn.textContent;
-      setLoading(btnId, outputId, true);
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("API error");
-        const data = await res.json();
-        document.getElementById(outputId).textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        const out = document.getElementById(outputId);
-        out.textContent = "❌ Error: " + e.message;
-        out.className = "error";
-      } finally {
-        setLoading(btnId, outputId, false);
-      }
-    }
+    async function callAPI(url, btnId, outputId, contextLabel) {
+  const btn = document.getElementById(btnId);
+  btn.dataset.label = btn.textContent;
+  setLoading(btnId, outputId, true);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("API error");
+    const data = await res.json();
+    document.getElementById(outputId).textContent = JSON.stringify(data, null, 2);
+    
+    // Silent context injection into chat
+    await fetch(`${BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: SESSION_ID,
+        message: `Context from ${contextLabel}: ${JSON.stringify(data)}`
+      })
+    });
 
-    function research() {
-      const topic = document.getElementById("researchInput").value;
-      callAPI(`${BASE}/research?topic=${encodeURIComponent(topic)}`, "researchBtn", "researchOutput");
-    }
+  } catch (e) {
+    const out = document.getElementById(outputId);
+    out.textContent = "❌ Error: " + e.message;
+    out.className = "error";
+  } finally {
+    setLoading(btnId, outputId, false);
+  }
+}
 
-    function compare() {
-      const a = document.getElementById("compareA").value;
-      const b = document.getElementById("compareB").value;
-      callAPI(`${BASE}/compare?topic_a=${encodeURIComponent(a)}&topic_b=${encodeURIComponent(b)}`, "compareBtn", "compareOutput");
-    }
+function research() {
+  const topic = document.getElementById("researchInput").value;
+  callAPI(`${BASE}/research?topic=${encodeURIComponent(topic)}`, "researchBtn", "researchOutput", "Research");
+}
 
-    function summarize() {
-      const url = document.getElementById("summarizeInput").value;
-      callAPI(`${BASE}/summarize?url=${encodeURIComponent(url)}`, "summarizeBtn", "summarizeOutput");
-    }
+function compare() {
+  const a = document.getElementById("compareA").value;
+  const b = document.getElementById("compareB").value;
+  callAPI(`${BASE}/compare?topic_a=${encodeURIComponent(a)}&topic_b=${encodeURIComponent(b)}`, "compareBtn", "compareOutput", "Compare");
+}
 
-    function trending() {
-      const category = document.getElementById("trendingInput").value;
-      callAPI(`${BASE}/trending?category=${encodeURIComponent(category)}`, "trendingBtn", "trendingOutput");
-    }
+function summarize() {
+  const url = document.getElementById("summarizeInput").value;
+  callAPI(`${BASE}/summarize?url=${encodeURIComponent(url)}`, "summarizeBtn", "summarizeOutput", "Summarize");
+}
+
+function trending() {
+  const category = document.getElementById("trendingInput").value;
+  callAPI(`${BASE}/trending?category=${encodeURIComponent(category)}`, "trendingBtn", "trendingOutput", "Trending");
+}
 
     const SESSION_ID = "user_" + Math.random().toString(36).substr(2, 9);
 
