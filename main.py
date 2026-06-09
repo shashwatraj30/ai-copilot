@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from tavily import TavilyClient
 from newspaper import Article
 from fastapi.middleware.cors import CORSMiddleware
+from supabase import create_client
 import os
 import json
 conversation_store = {}
@@ -19,6 +20,7 @@ app.add_middleware(
 )
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+supabase_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
 @app.get("/")
 def root():
@@ -219,3 +221,22 @@ Respond ONLY with a JSON object in this exact format, nothing else:
 
     raw = response.choices[0].message.content
     return json.loads(raw)
+
+#save research to supabase
+class SaveRequest(BaseModel):
+    topic: str
+    result: dict
+
+@app.post("/save-research")
+def save_research(request: SaveRequest):
+    data = supabase_client.table("saved_research").insert({
+        "topic": request.topic,
+        "result": request.result
+    }).execute()
+    
+    return {"message": "Research saved successfully", "data": data.data}
+#get research from supabase
+@app.get("/get-research")
+def get_research():
+    data = supabase_client.table("saved_research").select("*").execute()
+    return {"saved_research": data.data}
