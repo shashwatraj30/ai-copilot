@@ -189,3 +189,33 @@ def chat(request: ChatRequest):
         "reply": assistant_reply,
         "history_length": len(conversation_store[session_id])
     }
+
+@app.get("/fact-check")
+def fact_check(claim: str):
+    # Search for evidence
+    search_results = tavily.search(query=claim, max_results=3)
+    context = "\n".join([r["content"] for r in search_results["results"]])
+
+    prompt = f"""You are a fact-checking assistant. Analyze the following claim based on the search results.
+
+Claim: "{claim}"
+
+Search Results:
+{context}
+
+Respond ONLY with a JSON object in this exact format, nothing else:
+{{
+  "claim": "{claim}",
+  "verdict": "True/False/Partially True",
+  "confidence": "High/Medium/Low",
+  "reasoning": "2-3 sentence explanation",
+  "sources_support": true/false
+}}"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    raw = response.choices[0].message.content
+    return json.loads(raw)
