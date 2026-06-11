@@ -32,7 +32,7 @@
   <h2>Research a Topic</h2>
   <input id="researchInput" placeholder="e.g. quantum computing" />
   <button id="researchBtn" onclick="research()">Research</button>
-  <button id="saveBtn" onclick="saveResearch()" style="display:none;background:#059669;">Save Result</button>
+  <button id="saveBtn" onclick="saveResult('research')" style="display:none;background:#059669;">Save Result</button>
   <pre id="researchOutput">Output will appear here...</pre>
 </div>
 
@@ -42,6 +42,7 @@
     <input id="compareA" placeholder="Topic A e.g. Python" />
     <input id="compareB" placeholder="Topic B e.g. JavaScript" />
     <button id="compareBtn" onclick="compare()">Compare</button>
+    <button id="saveBtnCompare" onclick="saveResult('compare')" style="display:none;background:#059669;">Save Result</button>
     <pre id="compareOutput">Output will appear here...</pre>
   </div>
 
@@ -50,6 +51,7 @@
     <h2>Summarize a URL</h2>
     <input id="summarizeInput" placeholder="https://..." />
     <button id="summarizeBtn" onclick="summarize()">Summarize</button>
+    <button id="saveBtnSummarize" onclick="saveResult('summarize')" style="display:none;background:#059669;">Save Result</button>
     <pre id="summarizeOutput">Output will appear here...</pre>
   </div>
 
@@ -58,6 +60,7 @@
     <h2>Trending Topics</h2>
     <input id="trendingInput" placeholder="e.g. AI, crypto, tech" />
     <button id="trendingBtn" onclick="trending()">Get Trending</button>
+    <button id="saveBtnTrending" onclick="saveResult('trending')" style="display:none;background:#059669;">Save Result</button>
     <pre id="trendingOutput">Output will appear here...</pre>
   </div>
   <!-- Fact Check -->
@@ -65,6 +68,7 @@
   <h2>Fact Check a Claim</h2>
   <input id="factInput" placeholder="e.g. Python is the most popular language" />
   <button id="factBtn" onclick="factCheck()">Fact Check</button>
+  <button id="saveBtnFact" onclick="saveResult('fact')" style="display:none;background:#059669;">Save Result</button>
   <pre id="factOutput">Output will appear here...</pre>
 </div>
    <!-- Chat -->
@@ -74,27 +78,44 @@
   <div style="display:flex;gap:8px;">
     <input id="chatInput" placeholder="Ask anything..." onkeydown="if(event.key==='Enter')sendChat()" style="margin-bottom:0;" />
     <button id="chatBtn" onclick="sendChat()">Send</button>
+    <button onclick="clearChat()" style="background:#dc2626;">Clear</button>
   </div>
 </div>
   <p class="footer">Built with FastAPI + Groq + Tavily</p>
 
   <script>
     const BASE = "https://ai-copilot-production-c2eb.up.railway.app";
-    let lastResearchResult = null;
+    const SESSION_ID = "user_" + Math.random().toString(36).substr(2, 9);
+    function formatOutput(data, label) {
+  let out = "";
+  if (data.summary) out += `📝 Summary\n${data.summary}\n\n`;
+  if (data.key_points) out += `🔑 Key Points\n${data.key_points.map((p, i) => `${i+1}. ${p}`).join("\n")}\n\n`;
+  if (data.use_cases) out += `💡 Use Cases\n${data.use_cases.map((p, i) => `${i+1}. ${p}`).join("\n")}\n\n`;
+  if (data.verdict) out += `✅ Verdict: ${data.verdict}\n`;
+  if (data.confidence) out += `📊 Confidence: ${data.confidence}\n`;
+  if (data.reasoning) out += `🧠 Reasoning\n${data.reasoning}\n\n`;
+  if (data.similarities) out += `🤝 Similarities\n${data.similarities.map((p, i) => `${i+1}. ${p}`).join("\n")}\n\n`;
+  if (data.differences) out += `⚡ Differences\n${data.differences.map((p, i) => `${i+1}. ${p}`).join("\n")}\n\n`;
+  if (data.verdict && data.topic_a) out += `🏆 Verdict: ${data.verdict}\n\n`;
+  if (data.trending_topics) out += `🔥 Trending\n${data.trending_topics.map((p, i) => `${i+1}. ${p}`).join("\n")}\n\n`;
+  if (data.summaries) out += `📄 Summaries\n${data.summaries.map((p, i) => `${i+1}. ${p}`).join("\n")}`;
+  return out || JSON.stringify(data, null, 2);
+}
+const lastResults = {};
 
-async function saveResearch() {
-  if (!lastResearchResult) return;
+async function saveResult(type) {
+  if (!lastResults[type]) return;
   try {
     const res = await fetch(`${BASE}/save-research`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        topic: lastResearchResult.topic,
-        result: lastResearchResult
+        topic: lastResults[type].topic || lastResults[type].claim || lastResults[type].category || lastResults[type].url || type,
+        result: lastResults[type]
       })
     });
-    const data = await res.json();
-    alert("✅ Research saved!");
+    await res.json();
+    alert("✅ Result saved!");
   } catch (e) {
     alert("❌ Failed to save: " + e.message);
   }
@@ -113,7 +134,22 @@ async function saveResearch() {
       }
     }
 
-    async function callAPI(url, btnId, outputId, contextLabel) {
+    
+    const saveButtonMap = {
+  "Compare": "saveBtnCompare",
+  "Summarize": "saveBtnSummarize",
+  "Trending": "saveBtnTrending",
+  "FactCheck": "saveBtnFact"
+};
+
+const resultKeyMap = {
+  "Compare": "compare",
+  "Summarize": "summarize",
+  "Trending": "trending",
+  "FactCheck": "fact"
+};
+
+async function callAPI(url, btnId, outputId, contextLabel) {
   const btn = document.getElementById(btnId);
   btn.dataset.label = btn.textContent;
   setLoading(btnId, outputId, true);
@@ -121,9 +157,17 @@ async function saveResearch() {
     const res = await fetch(url);
     if (!res.ok) throw new Error("API error");
     const data = await res.json();
-    document.getElementById(outputId).textContent = JSON.stringify(data, null, 2);
-    
-    // Silent context injection into chat
+    document.getElementById(outputId).textContent = formatOutput(data, contextLabel);
+
+    // Store result for saving
+    const key = resultKeyMap[contextLabel];
+    if (key) {
+      lastResults[key] = data;
+      const saveBtnId = saveButtonMap[contextLabel];
+      if (saveBtnId) document.getElementById(saveBtnId).style.display = "inline-block";
+    }
+
+    // Silent context injection
     await fetch(`${BASE}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -132,7 +176,6 @@ async function saveResearch() {
         message: `Context from ${contextLabel}: ${JSON.stringify(data)}`
       })
     });
-
   } catch (e) {
     const out = document.getElementById(outputId);
     out.textContent = "❌ Error: " + e.message;
@@ -151,8 +194,8 @@ function research() {
   fetch(`${BASE}/research?topic=${encodeURIComponent(topic)}`)
     .then(res => res.json())
     .then(data => {
-      document.getElementById("researchOutput").textContent = JSON.stringify(data, null, 2);
-      lastResearchResult = data;
+      document.getElementById("researchOutput").textContent = formatOutput(data, "Research");
+      lastResults['research'] = data;
       document.getElementById("saveBtn").style.display = "inline-block";
 
       // Silent context injection
@@ -194,7 +237,11 @@ function factCheck() {
   callAPI(`${BASE}/fact-check?claim=${encodeURIComponent(claim)}`, "factBtn", "factOutput", "FactCheck");
 }
 
-    const SESSION_ID = "user_" + Math.random().toString(36).substr(2, 9);
+function clearChat() {
+  document.getElementById("chatWindow").innerHTML = "";
+}
+
+    
 
 function appendMessage(role, text) {
   const chatWindow = document.getElementById("chatWindow");

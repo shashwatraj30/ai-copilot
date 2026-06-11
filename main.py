@@ -5,6 +5,7 @@ from tavily import TavilyClient
 from newspaper import Article
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
+from pydantic import BaseModel
 import os
 import json
 conversation_store = {}
@@ -150,9 +151,6 @@ Respond ONLY with a JSON object in this exact format, nothing else:
 
     raw = response.choices[0].message.content
     return json.loads(raw)
-
-from fastapi import FastAPI
-from pydantic import BaseModel
 
 class ChatRequest(BaseModel):
     session_id: str
