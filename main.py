@@ -359,3 +359,53 @@ Now synthesize a comprehensive, critical, well-reasoned answer.
         "steps_taken": plan.get("steps"),
         "answer": final_answer
     }
+
+    class PDFRequest(BaseModel):
+        session_id: str
+        instruction: str
+        pdf_text: str
+
+    @app.post("/pdf-agent")
+    def pdf_agent(request: PDFRequest):
+        session_id = request.session_id
+
+        if session_id not in conversation_store:
+            conversation_store[session_id] = []
+
+        prompt = f"""You are an advanced PDF analysis agent. A user has uploaded a document and given you an instruction.
+
+    Instruction: "{request.instruction}"
+
+    Document Content:
+    {request.pdf_text[:12000]}
+
+    Respond based exactly on what the user asked:
+    - If they want a summary → summarize clearly
+    - If they want to learn/be taught → explain like a teacher, step by step
+    - If they want extraction → extract exactly what they asked for
+    - If they want critical analysis → think deeply, find patterns, contradictions, insights
+    - If they want anything else → do exactly that
+
+    Be thorough, intelligent and flexible. Format your response clearly."""
+
+        conversation_store[session_id].append({
+            "role": "user",
+            "content": prompt
+        })
+
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=conversation_store[session_id][-10:]
+        )
+
+        answer = response.choices[0].message.content
+
+        conversation_store[session_id].append({
+            "role": "assistant",
+            "content": answer
+        })
+
+        return {
+            "answer": answer,
+            "chars_processed": len(request.pdf_text[:12000])
+        }

@@ -23,6 +23,7 @@
     .footer { text-align: center; color: #444; font-size: 12px; margin-top: 40px; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js" onload="pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'"></script>
 </head>
 <body>
   <div id="authCard" class="card">
@@ -91,6 +92,14 @@
   <button id="agentBtn" onclick="runAgent()">Ask Agent</button>
   <button id="saveBtnAgent" onclick="saveResult('agent')" style="display:none;background:#059669;">Save Result</button>
   <pre id="agentOutput">Agent will think, plan and answer here...</pre>
+</div>
+<!-- PDF Agent -->
+<div class="card">
+  <h2>📄 PDF Agent</h2>
+  <input type="file" id="pdfInput" accept=".pdf" style="margin-bottom:10px;" />
+  <input id="pdfInstruction" placeholder="e.g. Summarize this, Teach me this, Extract key findings..." autocomplete="off" />
+  <button id="pdfBtn" onclick="runPDFAgent()">Analyze PDF</button>
+  <pre id="pdfOutput">Upload a PDF and give an instruction...</pre>
 </div>
    <!-- Chat -->
 <div class="card">
@@ -321,6 +330,49 @@ async function runAgent() {
     out.className = "error";
   } finally {
     setLoading("agentBtn", "agentOutput", false);
+  }
+}
+async function runPDFAgent() {
+  const fileInput = document.getElementById("pdfInput");
+  const instruction = document.getElementById("pdfInstruction").value;
+  if (!fileInput.files[0]) return alert("Please upload a PDF first");
+  if (!instruction) return alert("Please enter an instruction");
+
+  const btn = document.getElementById("pdfBtn");
+  btn.dataset.label = btn.textContent;
+  setLoading("pdfBtn", "pdfOutput", true);
+
+  try {
+    const file = fileInput.files[0];
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    
+    let fullText = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      fullText += content.items.map(item => item.str).join(" ") + "\n";
+    }
+
+    const res = await fetch(`${BASE}/pdf-agent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: SESSION_ID,
+        instruction: instruction,
+        pdf_text: fullText
+      })
+    });
+
+    const data = await res.json();
+    let out = `✅ Answer\n${data.answer}\n\n📊 Processed: ${data.chars_processed} characters`;
+    document.getElementById("pdfOutput").textContent = out;
+  } catch (e) {
+    const out = document.getElementById("pdfOutput");
+    out.textContent = "❌ Error: " + e.message;
+    out.className = "error";
+  } finally {
+    setLoading("pdfBtn", "pdfOutput", false);
   }
 }
 
