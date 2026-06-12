@@ -89,6 +89,7 @@
   <h2>🤖 Smart Agent</h2>
   <input id="agentInput" placeholder="e.g. Is quantum computing a threat to blockchain?" autocomplete="off" />
   <button id="agentBtn" onclick="runAgent()">Ask Agent</button>
+  <button id="saveBtnAgent" onclick="saveResult('agent')" style="display:none;background:#059669;">Save Result</button>
   <pre id="agentOutput">Agent will think, plan and answer here...</pre>
 </div>
    <!-- Chat -->
@@ -194,14 +195,16 @@ async function saveResult(type) {
   "Compare": "saveBtnCompare",
   "Summarize": "saveBtnSummarize",
   "Trending": "saveBtnTrending",
-  "FactCheck": "saveBtnFact"
+  "FactCheck": "saveBtnFact",
+  "Agent": "saveBtnAgent"
 };
 
 const resultKeyMap = {
   "Compare": "compare",
   "Summarize": "summarize",
   "Trending": "trending",
-  "FactCheck": "fact"
+  "FactCheck": "fact",
+  "Agent": "agent"
 };
 
 async function callAPI(url, btnId, outputId, contextLabel) {
@@ -310,6 +313,8 @@ async function runAgent() {
     out += `🔧 Steps Taken\n${data.steps_taken.map((s, i) => `${i+1}. [${s.tool}] ${s.input}`).join("\n")}\n\n`;
     out += `✅ Answer\n${data.answer}`;
     document.getElementById("agentOutput").textContent = out;
+    lastResults['agent'] = data;
+    document.getElementById("saveBtnAgent").style.display = "inline-block";
   } catch (e) {
     const out = document.getElementById("agentOutput");
     out.textContent = "❌ Error: " + e.message;
