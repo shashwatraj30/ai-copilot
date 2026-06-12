@@ -99,6 +99,7 @@
   <input type="file" id="pdfInput" accept=".pdf" style="margin-bottom:10px;" />
   <input id="pdfInstruction" placeholder="e.g. Summarize this, Teach me this, Extract key findings..." autocomplete="off" />
   <button id="pdfBtn" onclick="runPDFAgent()">Analyze PDF</button>
+  <button id="saveBtnPdf" onclick="saveResult('pdf')" style="display:none;background:#059669;">Save Result</button>
   <pre id="pdfOutput">Upload a PDF and give an instruction...</pre>
 </div>
    <!-- Chat -->
@@ -205,7 +206,8 @@ async function saveResult(type) {
   "Summarize": "saveBtnSummarize",
   "Trending": "saveBtnTrending",
   "FactCheck": "saveBtnFact",
-  "Agent": "saveBtnAgent"
+  "Agent": "saveBtnAgent",
+  "PDF": "saveBtnPdf"
 };
 
 const resultKeyMap = {
@@ -213,7 +215,9 @@ const resultKeyMap = {
   "Summarize": "summarize",
   "Trending": "trending",
   "FactCheck": "fact",
-  "Agent": "agent"
+  "Agent": "agent",
+  "PDF": "pdf"
+   
 };
 
 async function callAPI(url, btnId, outputId, contextLabel) {
@@ -367,6 +371,8 @@ async function runPDFAgent() {
     const data = await res.json();
     let out = `✅ Answer\n${data.answer}\n\n📊 Processed: ${data.chars_processed} characters`;
     document.getElementById("pdfOutput").textContent = out;
+    lastResults['pdf'] = data;
+    document.getElementById("saveBtnPdf").style.display = "inline-block";
   } catch (e) {
     const out = document.getElementById("pdfOutput");
     out.textContent = "❌ Error: " + e.message;
