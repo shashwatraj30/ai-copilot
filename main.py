@@ -230,7 +230,7 @@ class SaveRequest(BaseModel):
 def save_research(request: SaveRequest):
     data = supabase_client.table("saved_research").insert({
         "topic": request.topic,
-        "result": request.result
+        "result": request.result,
         "user_id": request.user_id
     }).execute()
     
