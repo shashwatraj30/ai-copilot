@@ -84,6 +84,13 @@
   <button id="saveBtnFact" onclick="saveResult('fact')" style="display:none;background:#059669;">Save Result</button>
   <pre id="factOutput">Output will appear here...</pre>
 </div>
+<!-- Agent -->
+<div class="card">
+  <h2>🤖 Smart Agent</h2>
+  <input id="agentInput" placeholder="e.g. Is quantum computing a threat to blockchain?" autocomplete="off" />
+  <button id="agentBtn" onclick="runAgent()">Ask Agent</button>
+  <pre id="agentOutput">Agent will think, plan and answer here...</pre>
+</div>
    <!-- Chat -->
 <div class="card">
   <h2>Chat with Copilot</h2>
@@ -283,6 +290,33 @@ function trending() {
 function factCheck() {
   const claim = document.getElementById("factInput").value;
   callAPI(`${BASE}/fact-check?claim=${encodeURIComponent(claim)}`, "factBtn", "factOutput", "FactCheck");
+}
+async function runAgent() {
+  const query = document.getElementById("agentInput").value;
+  if (!query) return;
+  const btn = document.getElementById("agentBtn");
+  btn.dataset.label = btn.textContent;
+  setLoading("agentBtn", "agentOutput", true);
+
+  try {
+    const res = await fetch(`${BASE}/agent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: SESSION_ID, query })
+    });
+    const data = await res.json();
+    let out = "";
+    out += `🧠 Thinking\n${data.thinking}\n\n`;
+    out += `🔧 Steps Taken\n${data.steps_taken.map((s, i) => `${i+1}. [${s.tool}] ${s.input}`).join("\n")}\n\n`;
+    out += `✅ Answer\n${data.answer}`;
+    document.getElementById("agentOutput").textContent = out;
+  } catch (e) {
+    const out = document.getElementById("agentOutput");
+    out.textContent = "❌ Error: " + e.message;
+    out.className = "error";
+  } finally {
+    setLoading("agentBtn", "agentOutput", false);
+  }
 }
 
 function clearChat() {
