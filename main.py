@@ -19,7 +19,16 @@ load_dotenv()
 
 app = FastAPI()
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+from fastapi.responses import JSONResponse
+
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Try again later."},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
