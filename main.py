@@ -8,6 +8,7 @@ from supabase import create_client
 from pydantic import BaseModel
 import os
 import json
+
 conversation_store = {}
 
 load_dotenv()
@@ -37,11 +38,9 @@ def ask(query: str):
 
 @app.get("/research")
 def research(topic: str):
-    # Step 1: Search the web
     search_results = tavily.search(query=topic, max_results=3)
     context = "\n".join([r["content"] for r in search_results["results"]])
 
-    # Step 2: Summarize with Groq
     prompt = f"""You are a research assistant. Based on the following search results, research the topic: "{topic}"
 
 Search Results:
@@ -59,17 +58,13 @@ Respond ONLY with a JSON object in this exact format, nothing else:
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}]
     )
-
-    raw = response.choices[0].message.content
-    return json.loads(raw)
+    return json.loads(response.choices[0].message.content)
 
 
 @app.get("/compare")
 def compare(topic_a: str, topic_b: str):
-    # Search both topics
     results_a = tavily.search(query=topic_a, max_results=2)
     results_b = tavily.search(query=topic_b, max_results=2)
-    
     context_a = "\n".join([r["content"] for r in results_a["results"]])
     context_b = "\n".join([r["content"] for r in results_b["results"]])
 
@@ -95,17 +90,15 @@ Respond ONLY with a JSON object in this exact format, nothing else:
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}]
     )
+    return json.loads(response.choices[0].message.content)
 
-    raw = response.choices[0].message.content
-    return json.loads(raw)
 
 @app.get("/summarize")
 def summarize(url: str):
-    # Fetch article content
     article = Article(url)
     article.download()
     article.parse()
-    
+
     prompt = f"""You are a research assistant. Summarize the following article content.
 
 Title: {article.title}
@@ -123,9 +116,8 @@ Respond ONLY with a JSON object in this exact format, nothing else:
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}]
     )
+    return json.loads(response.choices[0].message.content)
 
-    raw = response.choices[0].message.content
-    return json.loads(raw)
 
 @app.get("/trending")
 def trending(category: str):
@@ -148,9 +140,8 @@ Respond ONLY with a JSON object in this exact format, nothing else:
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}]
     )
+    return json.loads(response.choices[0].message.content)
 
-    raw = response.choices[0].message.content
-    return json.loads(raw)
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -159,40 +150,36 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 def chat(request: ChatRequest):
     session_id = request.session_id
-    
-    # Create new session if doesn't exist
+
     if session_id not in conversation_store:
         conversation_store[session_id] = []
-    
-    # Append user message to history
+
     conversation_store[session_id].append({
         "role": "user",
         "content": request.message
     })
-    
-    # Send full history to Groq
+
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=conversation_store[session_id][-10:]
     )
-    
+
     assistant_reply = response.choices[0].message.content
-    
-    # Append assistant reply to history
+
     conversation_store[session_id].append({
         "role": "assistant",
         "content": assistant_reply
     })
-    
+
     return {
         "session_id": session_id,
         "reply": assistant_reply,
         "history_length": len(conversation_store[session_id])
     }
 
+
 @app.get("/fact-check")
 def fact_check(claim: str):
-    # Search for evidence
     search_results = tavily.search(query=claim, max_results=3)
     context = "\n".join([r["content"] for r in search_results["results"]])
 
@@ -216,11 +203,9 @@ Respond ONLY with a JSON object in this exact format, nothing else:
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}]
     )
+    return json.loads(response.choices[0].message.content)
 
-    raw = response.choices[0].message.content
-    return json.loads(raw)
 
-#save research to supabase
 class SaveRequest(BaseModel):
     topic: str
     result: dict
@@ -233,9 +218,9 @@ def save_research(request: SaveRequest):
         "result": request.result,
         "user_id": request.user_id
     }).execute()
-    
     return {"message": "Research saved successfully", "data": data.data}
-#get research from supabase
+
+
 @app.get("/get-research")
 def get_research(user_id: str):
     data = supabase_client.table("saved_research").select("*").eq("user_id", user_id).execute()
@@ -245,16 +230,15 @@ def get_research(user_id: str):
 class AgentRequest(BaseModel):
     session_id: str
     query: str
+
 @app.post("/agent")
 def agent(request: AgentRequest):
     session_id = request.session_id
     query = request.query
 
-    # Initialize session memory
     if session_id not in conversation_store:
         conversation_store[session_id] = []
 
-    # Step 1: Reasoning — decide what tools to use
     plan_prompt = f"""You are an advanced AI research agent. A user has asked: "{query}"
 
 Your job is to think critically and decide what steps are needed to answer this properly.
@@ -282,16 +266,13 @@ Keep steps to maximum 3. Only include steps that are truly needed."""
         messages=[{"role": "user", "content": plan_prompt}]
     )
 
-    raw_plan = plan_response.choices[0].message.content
-    # Clean JSON
-    raw_plan = raw_plan.strip()
+    raw_plan = plan_response.choices[0].message.content.strip()
     if raw_plan.startswith("```"):
         raw_plan = raw_plan.split("```")[1]
         if raw_plan.startswith("json"):
             raw_plan = raw_plan[4:]
     plan = json.loads(raw_plan.strip())
 
-    # Step 2: Execute tools
     tool_results = []
     for step in plan.get("steps", []):
         tool = step.get("tool")
@@ -319,8 +300,7 @@ Keep steps to maximum 3. Only include steps that are truly needed."""
         elif tool == "reason":
             tool_results.append(f"[Reasoning needed: {inp}]")
 
-    # Step 3: Synthesize final answer
-    synthesis_prompt = f"""You are an advanced AI research agent. 
+    synthesis_prompt = f"""You are an advanced AI research agent.
 
 User query: "{query}"
 
@@ -329,13 +309,12 @@ Your reasoning: {plan.get('thinking')}
 Tool results:
 {chr(10).join(tool_results)}
 
-Now synthesize a comprehensive, critical, well-reasoned answer. 
+Now synthesize a comprehensive, critical, well-reasoned answer.
 - Don't just summarize — analyze and give your own reasoned conclusions
 - Point out nuances, contradictions, or uncertainties
 - Be specific and actionable
 - Format clearly with sections if needed"""
 
-    # Add to conversation memory
     conversation_store[session_id].append({
         "role": "user",
         "content": synthesis_prompt
@@ -360,52 +339,53 @@ Now synthesize a comprehensive, critical, well-reasoned answer.
         "answer": final_answer
     }
 
-    class PDFRequest(BaseModel):
-        session_id: str
-        instruction: str
-        pdf_text: str
 
-    @app.post("/pdf-agent")
-    def pdf_agent(request: PDFRequest):
-        session_id = request.session_id
+class PDFRequest(BaseModel):
+    session_id: str
+    instruction: str
+    pdf_text: str
 
-        if session_id not in conversation_store:
-            conversation_store[session_id] = []
+@app.post("/pdf-agent")
+def pdf_agent(request: PDFRequest):
+    session_id = request.session_id
 
-        prompt = f"""You are an advanced PDF analysis agent. A user has uploaded a document and given you an instruction.
+    if session_id not in conversation_store:
+        conversation_store[session_id] = []
 
-    Instruction: "{request.instruction}"
+    prompt = f"""You are an advanced PDF analysis agent. A user has uploaded a document and given you an instruction.
 
-    Document Content:
-    {request.pdf_text[:12000]}
+Instruction: "{request.instruction}"
 
-    Respond based exactly on what the user asked:
-    - If they want a summary → summarize clearly
-    - If they want to learn/be taught → explain like a teacher, step by step
-    - If they want extraction → extract exactly what they asked for
-    - If they want critical analysis → think deeply, find patterns, contradictions, insights
-    - If they want anything else → do exactly that
+Document Content:
+{request.pdf_text[:12000]}
 
-    Be thorough, intelligent and flexible. Format your response clearly."""
+Respond based exactly on what the user asked:
+- If they want a summary → summarize clearly
+- If they want to learn/be taught → explain like a teacher, step by step
+- If they want extraction → extract exactly what they asked for
+- If they want critical analysis → think deeply, find patterns, contradictions, insights
+- If they want anything else → do exactly that
 
-        conversation_store[session_id].append({
-            "role": "user",
-            "content": prompt
-        })
+Be thorough, intelligent and flexible. Format your response clearly."""
 
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=conversation_store[session_id][-10:]
-        )
+    conversation_store[session_id].append({
+        "role": "user",
+        "content": prompt
+    })
 
-        answer = response.choices[0].message.content
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=conversation_store[session_id][-10:]
+    )
 
-        conversation_store[session_id].append({
-            "role": "assistant",
-            "content": answer
-        })
+    answer = response.choices[0].message.content
 
-        return {
-            "answer": answer,
-            "chars_processed": len(request.pdf_text[:12000])
-        }
+    conversation_store[session_id].append({
+        "role": "assistant",
+        "content": answer
+    })
+
+    return {
+        "answer": answer,
+        "chars_processed": len(request.pdf_text[:12000])
+    }
