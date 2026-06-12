@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from groq import Groq
 from dotenv import load_dotenv
 from tavily import TavilyClient
@@ -6,14 +6,20 @@ from newspaper import Article
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
 import json
 
 conversation_store = {}
+limiter = Limiter(key_func=get_remote_address)
 
 load_dotenv()
 
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,7 +43,12 @@ def ask(query: str):
     return {"answer": response.choices[0].message.content}
 
 @app.get("/research")
-def research(topic: str):
+@limiter.limit("50/minute")
+def research(request: Request, topic: str):
+    if not topic or len(topic.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Topic cannot be empty")
+    if len(topic) > 500:
+        raise HTTPException(status_code=400, detail="Topic too long, max 500 characters")
     search_results = tavily.search(query=topic, max_results=3)
     context = "\n".join([r["content"] for r in search_results["results"]])
 
@@ -62,7 +73,12 @@ Respond ONLY with a JSON object in this exact format, nothing else:
 
 
 @app.get("/compare")
-def compare(topic_a: str, topic_b: str):
+@limiter.limit("50/minute")
+def compare(request: Request, topic_a: str, topic_b: str):
+    if not topic_a or not topic_b:
+        raise HTTPException(status_code=400, detail="Both topics required")
+    if len(topic_a) > 500 or len(topic_b) > 500:
+        raise HTTPException(status_code=400, detail="Topic too long, max 500 characters")
     results_a = tavily.search(query=topic_a, max_results=2)
     results_b = tavily.search(query=topic_b, max_results=2)
     context_a = "\n".join([r["content"] for r in results_a["results"]])
@@ -94,7 +110,10 @@ Respond ONLY with a JSON object in this exact format, nothing else:
 
 
 @app.get("/summarize")
-def summarize(url: str):
+@limiter.limit("50/minute")
+def summarize(request: Request, url: str):
+    if not url or not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="Valid URL required")
     article = Article(url)
     article.download()
     article.parse()
@@ -120,7 +139,10 @@ Respond ONLY with a JSON object in this exact format, nothing else:
 
 
 @app.get("/trending")
-def trending(category: str):
+@limiter.limit("50/minute")
+def trending(request: Request, category: str):
+    if not category or len(category.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Category cannot be empty")
     results = tavily.search(query=f"trending {category} news today", max_results=5)
     context = "\n".join([r["content"] for r in results["results"]])
 
@@ -148,15 +170,20 @@ class ChatRequest(BaseModel):
     message: str
 
 @app.post("/chat")
-def chat(request: ChatRequest):
-    session_id = request.session_id
+@limiter.limit("50/minute")
+def chat(request: Request, body: ChatRequest):
+    if not body.message or len(body.message.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    if len(body.message) > 2000:
+        raise HTTPException(status_code=400, detail="Message too long, max 2000 characters")
+    session_id = body.session_id
 
     if session_id not in conversation_store:
         conversation_store[session_id] = []
 
     conversation_store[session_id].append({
         "role": "user",
-        "content": request.message
+        "content": body.message
     })
 
     response = client.chat.completions.create(
@@ -179,7 +206,12 @@ def chat(request: ChatRequest):
 
 
 @app.get("/fact-check")
-def fact_check(claim: str):
+@limiter.limit("50/minute")
+def fact_check(request: Request, claim: str):
+    if not claim or len(claim.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Claim cannot be empty")
+    if len(claim) > 1000:
+        raise HTTPException(status_code=400, detail="Claim too long, max 1000 characters")
     search_results = tavily.search(query=claim, max_results=3)
     context = "\n".join([r["content"] for r in search_results["results"]])
 
@@ -212,11 +244,14 @@ class SaveRequest(BaseModel):
     user_id: str
 
 @app.post("/save-research")
-def save_research(request: SaveRequest):
+@limiter.limit("50/minute")
+def save_research(request: Request, body: SaveRequest):
+    if not body.topic or len(body.topic.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Topic cannot be empty")
     data = supabase_client.table("saved_research").insert({
-        "topic": request.topic,
-        "result": request.result,
-        "user_id": request.user_id
+        "topic": body.topic,
+        "result": body.result,
+        "user_id": body.user_id
     }).execute()
     return {"message": "Research saved successfully", "data": data.data}
 
@@ -232,9 +267,14 @@ class AgentRequest(BaseModel):
     query: str
 
 @app.post("/agent")
-def agent(request: AgentRequest):
-    session_id = request.session_id
-    query = request.query
+@limiter.limit("10/minute")
+def agent(request: Request, body: AgentRequest):
+    if not body.query or len(body.query.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+    if len(body.query) > 1000:
+        raise HTTPException(status_code=400, detail="Query too long, max 1000 characters")
+    session_id = body.session_id
+    query = body.query
 
     if session_id not in conversation_store:
         conversation_store[session_id] = []
@@ -346,18 +386,23 @@ class PDFRequest(BaseModel):
     pdf_text: str
 
 @app.post("/pdf-agent")
-def pdf_agent(request: PDFRequest):
-    session_id = request.session_id
+@limiter.limit("10/minute")
+def pdf_agent(request: Request, body: PDFRequest):
+    if not body.instruction or len(body.instruction.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Instruction cannot be empty")
+    if not body.pdf_text or len(body.pdf_text.strip()) == 0:
+        raise HTTPException(status_code=400, detail="PDF text cannot be empty")
+    session_id = body.session_id
 
     if session_id not in conversation_store:
         conversation_store[session_id] = []
 
     prompt = f"""You are an advanced PDF analysis agent. A user has uploaded a document and given you an instruction.
 
-Instruction: "{request.instruction}"
+Instruction: "{body.instruction}"
 
 Document Content:
-{request.pdf_text[:12000]}
+{body.pdf_text[:12000]}
 
 Respond based exactly on what the user asked:
 - If they want a summary → summarize clearly
@@ -387,5 +432,5 @@ Be thorough, intelligent and flexible. Format your response clearly."""
 
     return {
         "answer": answer,
-        "chars_processed": len(request.pdf_text[:12000])
+        "chars_processed": len(body.pdf_text[:12000])
     }
