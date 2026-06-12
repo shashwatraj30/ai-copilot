@@ -158,7 +158,8 @@ async function saveResult(type) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         topic: lastResults[type].topic || lastResults[type].claim || lastResults[type].category || lastResults[type].url || type,
-        result: lastResults[type]
+        result: lastResults[type],
+        user_id: (await supabaseClient.auth.getUser()).data.user.id
       })
     });
     await res.json();

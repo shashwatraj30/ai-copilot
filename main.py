@@ -224,17 +224,19 @@ Respond ONLY with a JSON object in this exact format, nothing else:
 class SaveRequest(BaseModel):
     topic: str
     result: dict
+    user_id: str
 
 @app.post("/save-research")
 def save_research(request: SaveRequest):
     data = supabase_client.table("saved_research").insert({
         "topic": request.topic,
         "result": request.result
+        "user_id": request.user_id
     }).execute()
     
     return {"message": "Research saved successfully", "data": data.data}
 #get research from supabase
 @app.get("/get-research")
-def get_research():
-    data = supabase_client.table("saved_research").select("*").execute()
+def get_research(user_id: str):
+    data = supabase_client.table("saved_research").select("*").eq("user_id", user_id).execute()
     return {"saved_research": data.data}
