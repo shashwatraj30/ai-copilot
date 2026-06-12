@@ -22,11 +22,24 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .footer { text-align: center; color: #444; font-size: 12px; margin-top: 40px; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+  <div id="authCard" class="card">
+    <h2>Login / Signup</h2>
+    <input id="authEmail" placeholder="Email" type="email" />
+    <input id="authPassword" placeholder="Password" type="password" />
+    <button onclick="login()">Login</button>
+    <button onclick="signup()" style="background:#059669;margin-left:8px;">Signup</button>
+    <p id="authMsg" style="margin-top:10px;font-size:13px;color:#f87171;"></p>
+  </div>
+  
+  <div id="appContent" style="display:none;">
   <h1>🔬 AI Research Copilot</h1>
   <p class="sub">Powered by Groq + Tavily — Real-time AI research tool</p>
-
+  <div style="text-align:right;max-width:700px;margin:0 auto 10px;">
+    <button onclick="logout()" style="background:#dc2626;font-size:12px;padding:6px 14px;">Logout</button>
+  </div>
   <!-- Research -->
 <div class="card">
   <h2>Research a Topic</h2>
@@ -82,8 +95,42 @@
   </div>
 </div>
   <p class="footer">Built with FastAPI + Groq + Tavily</p>
-
+</div>
+ 
   <script>
+    const supabase = window.supabase.createClient(
+  "https://smlsxdnvsyyparbwxuot.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtbHN4ZG52c3l5cGFyYnd4dW90Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMDEyODEsImV4cCI6MjA5NjU3NzI4MX0.yWtnkwBm2U0dUmPmcTjafsLclOEChscs0S1z5HXjJuA"
+);
+
+supabase.auth.onAuthStateChange((event, session) => {
+  if (session) {
+    document.getElementById("authCard").style.display = "none";
+    document.getElementById("appContent").style.display = "block";
+  } else {
+    document.getElementById("authCard").style.display = "block";
+    document.getElementById("appContent").style.display = "none";
+  }
+});
+
+async function login() {
+  const email = document.getElementById("authEmail").value;
+  const password = document.getElementById("authPassword").value;
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) document.getElementById("authMsg").textContent = "❌ " + error.message;
+}
+
+async function signup() {
+  const email = document.getElementById("authEmail").value;
+  const password = document.getElementById("authPassword").value;
+  const { error } = await supabase.auth.signUp({ email, password });
+  if (error) document.getElementById("authMsg").textContent = "❌ " + error.message;
+  else document.getElementById("authMsg").style.color = "#4ade80", document.getElementById("authMsg").textContent = "✅ Account created! You can now login.";
+}
+
+async function logout() {
+  await supabase.auth.signOut();
+} 
     const BASE = "https://ai-copilot-production-c2eb.up.railway.app";
     const SESSION_ID = "user_" + Math.random().toString(36).substr(2, 9);
     function formatOutput(data, label) {
