@@ -443,3 +443,9 @@ Be thorough, intelligent and flexible. Format your response clearly."""
         "answer": answer,
         "chars_processed": len(body.pdf_text[:12000])
     }
+
+    @app.delete("/delete-research/{item_id}")
+    @limiter.limit("50/minute")
+    def delete_research(request: Request, item_id: int, user_id: str):
+        data = supabase_client.table("saved_research").delete().eq("id", item_id).eq("user_id", user_id).execute()
+        return {"message": "Deleted successfully"}

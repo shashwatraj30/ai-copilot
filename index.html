@@ -21,11 +21,55 @@
     .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 8px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .footer { text-align: center; color: #444; font-size: 12px; margin-top: 40px; }
+    .sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 280px; background: #111; border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 20px 0; z-index: 100; transform: translateX(-100%); transition: transform 0.3s ease; }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-header { padding: 0 20px 20px; border-bottom: 1px solid #2a2a2a; display: flex; justify-content: space-between; align-items: center; }
+    .sidebar-header h3 { color: #7c3aed; font-size: 16px; }
+    .sidebar-close { background: none; border: none; color: #888; font-size: 20px; cursor: pointer; padding: 0; }
+    .sidebar-close:hover { background: none; color: #fff; }
+    .sidebar-section { margin: 16px 0; }
+    .sidebar-section-title { padding: 8px 20px; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .sidebar-section-title:hover { color: #888; }
+    .sidebar-items { display: none; }
+    .sidebar-items.expanded { display: block; }
+    .sidebar-item { padding: 8px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-left: 2px solid transparent; }
+    .sidebar-item:hover { background: #1a1a1a; border-left-color: #7c3aed; }
+    .sidebar-item-topic { font-size: 13px; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+    .sidebar-item-delete { background: none; border: none; color: #555; font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+    .sidebar-item-delete:hover { background: #dc2626; color: #fff; }
+    .hamburger { position: fixed; top: 16px; left: 16px; z-index: 200; background: #7c3aed; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 18px; color: white; }
+    .hamburger:hover { background: #6d28d9; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 99; }
+    .sidebar-overlay.open { display: block; }
+    @media (max-width: 768px) {
+      body { padding: 60px 12px 20px; }
+      .card { padding: 16px; }
+      h1 { font-size: 22px; }
+      button { padding: 8px 16px; font-size: 13px; }
+      input { font-size: 13px; }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js" onload="pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'"></script>
 </head>
 <body>
+      <!-- Hamburger -->
+  <button class="hamburger" onclick="toggleSidebar()">☰</button>
+
+  <!-- Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h3>📚 Saved Research</h3>
+      <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+    </div>
+
+    <div id="sidebarContent">
+      <p style="padding:20px;color:#555;font-size:13px;">Login to see saved results</p>
+    </div>
+  </div>
   <div id="authCard" class="card">
     <h2>Login / Signup</h2>
     <input id="authEmail" placeholder="Email" type="email" />
@@ -125,6 +169,7 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
   if (session) {
     document.getElementById("authCard").style.display = "none";
     document.getElementById("appContent").style.display = "block";
+    loadSidebar();
   } else {
     document.getElementById("authCard").style.display = "block";
     document.getElementById("appContent").style.display = "none";
@@ -148,9 +193,89 @@ async function signup() {
 
 async function logout() {
   await supabaseClient.auth.signOut();
-} 
-    const BASE = "https://ai-copilot-production-c2eb.up.railway.app";
-    const SESSION_ID = "user_" + Math.random().toString(36).substr(2, 9);
+}
+const BASE = "https://ai-copilot-production-c2eb.up.railway.app";
+const SESSION_ID = "user_" + Math.random().toString(36).substr(2, 9);
+function toggleSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("sidebarOverlay");
+  sidebar.classList.toggle("open");
+  overlay.classList.toggle("open");
+}
+
+async function loadSidebar() {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return;
+
+  try {
+    const res = await fetch(`${BASE}/get-research?user_id=${user.id}`);
+    const data = await res.json();
+    const items = data.saved_research;
+
+    const groups = {
+      "Research": [],
+      "Compare": [],
+      "Summarize": [],
+      "Trending": [],
+      "Fact Check": [],
+      "Agent": [],
+      "PDF": []
+    };
+
+    items.forEach(item => {
+      const r = item.result;
+      if (r.topic && r.key_points) groups["Research"].push(item);
+      else if (r.topic_a) groups["Compare"].push(item);
+      else if (r.url) groups["Summarize"].push(item);
+      else if (r.trending_topics) groups["Trending"].push(item);
+      else if (r.claim) groups["Fact Check"].push(item);
+      else if (r.thinking) groups["Agent"].push(item);
+      else if (r.answer && r.chars_processed) groups["PDF"].push(item);
+    });
+
+    let html = "";
+    for (const [type, typeItems] of Object.entries(groups)) {
+      if (typeItems.length === 0) continue;
+      html += `
+        <div class="sidebar-section">
+          <div class="sidebar-section-title" onclick="toggleSection('${type}')">
+            <span>${type} (${typeItems.length})</span>
+            <span>▾</span>
+          </div>
+          <div class="sidebar-items expanded" id="section-${type}">
+            ${typeItems.map(item => `
+              <div class="sidebar-item">
+                <span class="sidebar-item-topic" title="${item.topic}">${item.topic}</span>
+                <button class="sidebar-item-delete" onclick="deleteItem(${item.id}, '${user.id}')">🗑</button>
+              </div>
+            `).join("")}
+          </div>
+        </div>`;
+    }
+
+    document.getElementById("sidebarContent").innerHTML = html || '<p style="padding:20px;color:#555;font-size:13px;">No saved results yet</p>';
+  } catch (e) {
+    console.error("Sidebar load error:", e);
+  }
+}
+
+function toggleSection(type) {
+  const section = document.getElementById(`section-${type}`);
+  section.classList.toggle("expanded");
+}
+
+async function deleteItem(itemId, userId) {
+  if (!confirm("Delete this saved result?")) return;
+  try {
+    await fetch(`${BASE}/delete-research/${itemId}?user_id=${userId}`, {
+      method: "DELETE"
+    });
+    loadSidebar();
+  } catch (e) {
+    alert("❌ Failed to delete: " + e.message);
+  }
+}
+    
     function formatOutput(data, label) {
   let out = "";
   if (data.summary) out += `📝 Summary\n${data.summary}\n\n`;
