@@ -244,9 +244,9 @@ async function loadSidebar() {
           </div>
           <div class="sidebar-items expanded" id="section-${type}">
             ${typeItems.map(item => `
-              <div class="sidebar-item">
+              <div class="sidebar-item" onclick="loadResult(${JSON.stringify(item).replace(/"/g, '&quot;')})">
                 <span class="sidebar-item-topic" title="${item.topic}">${item.topic}</span>
-                <button class="sidebar-item-delete" onclick="deleteItem(${item.id}, '${user.id}')">🗑</button>
+                <button class="sidebar-item-delete" onclick="event.stopPropagation();deleteItem(${item.id}, '${user.id}')">🗑</button>
               </div>
             `).join("")}
           </div>
@@ -275,7 +275,59 @@ async function deleteItem(itemId, userId) {
     alert("❌ Failed to delete: " + e.message);
   }
 }
-    
+function loadResult(item) {
+  const r = item.result;
+  toggleSidebar();
+
+  if (r.topic && r.key_points) {
+    document.getElementById("researchInput").value = item.topic;
+    document.getElementById("researchOutput").textContent = formatOutput(r, "Research");
+    lastResults['research'] = r;
+    document.getElementById("saveBtn").style.display = "inline-block";
+    document.getElementById("researchOutput").scrollIntoView({ behavior: "smooth" });
+  } else if (r.topic_a) {
+    document.getElementById("compareA").value = r.topic_a;
+    document.getElementById("compareB").value = r.topic_b;
+    document.getElementById("compareOutput").textContent = formatOutput(r, "Compare");
+    lastResults['compare'] = r;
+    document.getElementById("saveBtnCompare").style.display = "inline-block";
+    document.getElementById("compareOutput").scrollIntoView({ behavior: "smooth" });
+  } else if (r.url) {
+    document.getElementById("summarizeInput").value = r.url;
+    document.getElementById("summarizeOutput").textContent = formatOutput(r, "Summarize");
+    lastResults['summarize'] = r;
+    document.getElementById("saveBtnSummarize").style.display = "inline-block";
+    document.getElementById("summarizeOutput").scrollIntoView({ behavior: "smooth" });
+  } else if (r.trending_topics) {
+    document.getElementById("trendingInput").value = item.topic;
+    document.getElementById("trendingOutput").textContent = formatOutput(r, "Trending");
+    lastResults['trending'] = r;
+    document.getElementById("saveBtnTrending").style.display = "inline-block";
+    document.getElementById("trendingOutput").scrollIntoView({ behavior: "smooth" });
+  } else if (r.claim) {
+    document.getElementById("factInput").value = r.claim;
+    document.getElementById("factOutput").textContent = formatOutput(r, "FactCheck");
+    lastResults['fact'] = r;
+    document.getElementById("saveBtnFact").style.display = "inline-block";
+    document.getElementById("factOutput").scrollIntoView({ behavior: "smooth" });
+  } else if (r.thinking) {
+    document.getElementById("agentInput").value = r.query || item.topic;
+    let out = `🧠 Thinking\n${r.thinking}\n\n`;
+    out += `🔧 Steps Taken\n${r.steps_taken.map((s, i) => `${i+1}. [${s.tool}] ${s.input}`).join("\n")}\n\n`;
+    out += `✅ Answer\n${r.answer}`;
+    document.getElementById("agentOutput").textContent = out;
+    lastResults['agent'] = r;
+    document.getElementById("saveBtnAgent").style.display = "inline-block";
+    document.getElementById("agentOutput").scrollIntoView({ behavior: "smooth" });
+  } else if (r.answer && r.chars_processed) {
+    document.getElementById("pdfInstruction").value = item.topic;
+    let out = `✅ Answer\n${r.answer}\n\n📊 Processed: ${r.chars_processed} characters`;
+    document.getElementById("pdfOutput").textContent = out;
+    lastResults['pdf'] = r;
+    document.getElementById("saveBtnPdf").style.display = "inline-block";
+    document.getElementById("pdfOutput").scrollIntoView({ behavior: "smooth" });
+  }
+}
     function formatOutput(data, label) {
   let out = "";
   if (data.summary) out += `📝 Summary\n${data.summary}\n\n`;
