@@ -456,14 +456,15 @@ def delete_research(request: Request, item_id: int, user_id: str):
     
 
 @app.get("/rag-search")
-def rag_search(query: str, match_count: int = 5):
+def rag_search(query: str, user_id: str, match_count: int = 5):
     # Embed the query
     query_embedding = model.encode(query).tolist()
     
     # Search Supabase for similar chunks
     result = supabase_client.rpc("match_documents", {
         "query_embedding": query_embedding,
-        "match_count": match_count
+        "match_count": match_count,
+        "filter_user_id": user_id
     }).execute()
     
     return {
@@ -472,14 +473,15 @@ def rag_search(query: str, match_count: int = 5):
     }
 
 @app.get("/rag-query")
-def rag_query(query: str, match_count: int = 5):
+def rag_query(query: str, user_id: str, match_count: int = 5):
     # Step 1: Embed the query
     query_embedding = model.encode(query).tolist()
     
     # Step 2: Retrieve relevant chunks
     result = supabase_client.rpc("match_documents", {
         "query_embedding": query_embedding,
-        "match_count": match_count
+        "match_count": match_count,
+        "filter_user_id": user_id 
     }).execute()
     
     chunks = result.data
