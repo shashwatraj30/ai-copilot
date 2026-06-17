@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException,UploadFile, File
 from groq import Groq
 from dotenv import load_dotenv
 from tavily import TavilyClient
@@ -10,6 +10,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from sentence_transformers import SentenceTransformer
+import fitz
 import os
 import json
 
@@ -524,3 +525,75 @@ Answer:"""
             for c in chunks
         ]
     }
+
+
+@app.post("/ingest-pdf")
+@limiter.limit("10/minute")
+async def ingest_pdf(request: Request, file: UploadFile = File(...), user_id: str = "anonymous"):
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files accepted")
+    
+    # Read PDF bytes
+    contents = await file.read()
+    doc = fitz.open(stream=contents, filetype="pdf")
+    
+    # Extract text
+    full_text = ""
+    for page in doc:
+        full_text += page.get_text()
+    
+    if not full_text.strip():
+        raise HTTPException(status_code=400, detail="Could not extract text from PDF")
+    
+    # Chunk text
+    words = full_text.split()
+    chunks = []
+    i = 0
+    while i < len(words):
+        chunk = " ".join(words[i:i+200])
+        chunks.append(chunk)
+        i += 200 - 50
+    
+    # Embed and store each chunk
+    stored = 0
+    for idx, chunk in enumerate(chunks):
+        embedding = model.encode(chunk).tolist()
+        supabase_client.table("documents").insert({
+            "user_id": user_id if user_id != "anonymous" else None,
+            "content": chunk,
+            "embedding": embedding,
+            "metadata": {"source": file.filename, "chunk_index": idx}
+        }).execute()
+        stored += 1
+    
+    return {
+        "message": "PDF ingested successfully",
+        "filename": file.filename,
+        "chunks_stored": stored
+    }
+@app.get("/my-documents")
+def my_documents(user_id: str):
+    result = supabase_client.table("documents")\
+        .select("id, metadata, created_at")\
+        .eq("user_id", user_id)\
+        .execute()
+    
+    # Group by source filename
+    files = {}
+    for row in result.data:
+        source = row["metadata"].get("source", "unknown")
+        if source not in files:
+            files[source] = {"filename": source, "chunks": 0, "created_at": row["created_at"]}
+        files[source]["chunks"] += 1
+    
+    return {"documents": list(files.values())}
+@app.delete("/delete-document")
+@limiter.limit("20/minute")
+def delete_document(request: Request, user_id: str, filename: str):
+    result = supabase_client.table("documents")\
+        .delete()\
+        .eq("user_id", user_id)\
+        .eq("metadata->>source", filename)\
+        .execute()
+    
+    return {"message": f"Deleted all chunks for {filename}"}
