@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from sentence_transformers import SentenceTransformer
 import os
 import json
 
@@ -38,6 +39,7 @@ app.add_middleware(
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 supabase_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 @app.get("/")
 def root():
@@ -444,8 +446,81 @@ Be thorough, intelligent and flexible. Format your response clearly."""
         "chars_processed": len(body.pdf_text[:12000])
     }
 
-    @app.delete("/delete-research/{item_id}")
-    @limiter.limit("50/minute")
-    def delete_research(request: Request, item_id: int, user_id: str):
-        data = supabase_client.table("saved_research").delete().eq("id", item_id).eq("user_id", user_id).execute()
-        return {"message": "Deleted successfully"}
+@app.delete("/delete-research/{item_id}")
+@limiter.limit("50/minute")
+def delete_research(request: Request, item_id: int, user_id: str):
+    data = supabase_client.table("saved_research").delete().eq("id", item_id).eq("user_id", user_id).execute()
+    return {"message": "Deleted successfully"}
+
+    
+
+@app.get("/rag-search")
+def rag_search(query: str, match_count: int = 5):
+    # Embed the query
+    query_embedding = model.encode(query).tolist()
+    
+    # Search Supabase for similar chunks
+    result = supabase_client.rpc("match_documents", {
+        "query_embedding": query_embedding,
+        "match_count": match_count
+    }).execute()
+    
+    return {
+        "query": query,
+        "results": result.data
+    }
+
+@app.get("/rag-query")
+def rag_query(query: str, match_count: int = 5):
+    # Step 1: Embed the query
+    query_embedding = model.encode(query).tolist()
+    
+    # Step 2: Retrieve relevant chunks
+    result = supabase_client.rpc("match_documents", {
+        "query_embedding": query_embedding,
+        "match_count": match_count
+    }).execute()
+    
+    chunks = result.data
+    
+    if not chunks:
+        return {"query": query, "answer": "No relevant documents found.", "sources": []}
+    
+    # Step 3: Build context from chunks
+    context = ""
+    for i, chunk in enumerate(chunks):
+        context += f"[Source {i+1}]: {chunk['content']}\n\n"
+    
+    # Step 4: Send to Groq with context
+    prompt = f"""You are a helpful assistant. Answer the user's question using ONLY the context provided below.
+For each point you make, cite the source number like [Source 1], [Source 2] etc.
+If the context doesn't contain enough information, say so clearly.
+
+Context:
+{context}
+
+Question: {query}
+
+Answer:"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    
+    answer = response.choices[0].message.content
+    
+    # Step 5: Return answer + sources
+    return {
+        "query": query,
+        "answer": answer,
+        "sources": [
+            {
+                "chunk_index": c["metadata"].get("chunk_index"),
+                "source": c["metadata"].get("source"),
+                "similarity": c["similarity"],
+                "content_preview": c["content"][:200]
+            }
+            for c in chunks
+        ]
+    }
