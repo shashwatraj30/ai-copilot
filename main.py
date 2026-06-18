@@ -481,7 +481,7 @@ def rag_query(query: str, user_id: str, match_count: int = 5):
     result = supabase_client.rpc("match_documents", {
         "query_embedding": query_embedding,
         "match_count": match_count,
-        "filter_user_id": user_id 
+        "filter_user_id": None 
     }).execute()
     
     chunks = result.data
