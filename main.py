@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException,UploadFile, File
+from fastapi import FastAPI, Request, HTTPException,UploadFile, File, Form
 from groq import Groq
 from dotenv import load_dotenv
 from tavily import TavilyClient
@@ -531,7 +531,7 @@ Answer:"""
 
 @app.post("/ingest-pdf")
 @limiter.limit("10/minute")
-async def ingest_pdf(request: Request, file: UploadFile = File(...), user_id: str = "anonymous"):
+async def ingest_pdf(request: Request, file: UploadFile = File(...), user_id: str = Form("anonymous")):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files accepted")
     
