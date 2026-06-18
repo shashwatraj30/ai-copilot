@@ -561,7 +561,7 @@ async def ingest_pdf(request: Request, file: UploadFile = File(...), user_id: st
     for idx, chunk in enumerate(chunks):
         embedding = model.encode(chunk).tolist()
         supabase_client.table("documents").insert({
-            "user_id": user_id if user_id and user_id != "anonymous" else None,
+            "user_id": user_id ,
             "content": chunk,
             "embedding": embedding,
             "metadata": {"source": file.filename, "chunk_index": idx}
